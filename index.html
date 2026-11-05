@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Grampus 磁带作品集</title>
+  <meta name="description" content="芦茂霖（Grampus）的游戏作品集：把磁带插进播放机，查看每个作品。">
+  <meta name="theme-color" content="#46993b">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect x='1' y='3' width='14' height='10' fill='%23bd512e'/%3E%3Crect x='3' y='4' width='10' height='3' fill='%23ebdfc0'/%3E%3Crect x='4' y='8' width='8' height='3' fill='%2316110f'/%3E%3Crect x='5' y='9' width='1' height='1' fill='%23ebdfc0'/%3E%3Crect x='10' y='9' width='1' height='1' fill='%23ebdfc0'/%3E%3C/svg%3E">
+  <link rel="preload" href="./fonts/fp10.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="./fonts/fp8.woff2" as="font" type="font/woff2" crossorigin>
+  <style>
+    /* Fusion Pixel 10px / 8px（SIL OFL 1.1），已按页面用字裁剪，见 tools/subset_font.py。
+       正文用 10px；8px 只用于磁带纸标签（画在画布上）。 */
+    @font-face { font-family: FusionPixel; src: url(./fonts/fp10.woff2) format('woff2'); font-display: block; }
+    @font-face { font-family: FusionPixel8; src: url(./fonts/fp8.woff2) format('woff2'); font-display: block; }
+  </style>
+</head>
+<body>
+  <h1 class="sr-only">Grampus 的游戏作品集</h1>
+  <canvas id="scene" aria-hidden="true"></canvas>
+
+  <main id="stage">
+    <div id="bagHit" aria-hidden="true"></div>
+    <div id="tapes" role="group" aria-label="皮质收纳包里的磁带"></div>
+
+    <div id="machine" role="group" aria-label="磁带机">
+      <div id="keys"></div>
+      <div id="volWheel" role="slider" tabindex="0" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="60" aria-valuetext="60%"><span>音量</span></div>
+      <section id="screen" aria-label="详情屏">
+        <div id="idleView">
+          <p class="scr-head">A 面 · 游戏作品</p>
+          <ol id="trackList"></ol>
+        </div>
+        <div id="detailView" hidden>
+          <h2 id="dHead"><span id="dCode"></span> <span id="dTitle"></span><span id="dStatus"></span></h2>
+          <button type="button" id="vidBtn" class="vid">
+            <video id="loopVid" muted loop playsinline preload="none" disablepictureinpicture></video>
+            <span class="vid-play" aria-hidden="true">▶</span>
+            <span class="vid-err" aria-hidden="true">NO SIGNAL</span>
+          </button>
+          <p id="dIntro"></p>
+          <ul id="dTags" aria-label="标签"></ul>
+          <div id="dLinks">
+            <a id="dPlay" class="sbtn" target="_blank" rel="noopener">试玩</a>
+            <a id="dSource" class="sbtn" target="_blank" rel="noopener">源码</a>
+          </div>
+        </div>
+      </section>
+      <div id="winHint" aria-hidden="true"><span>插入磁带</span></div>
+      <div id="counter" aria-hidden="true">000</div>
+      <button type="button" id="catBtn" class="hit" aria-label="三花猫挂件：点一下摇一摇"></button>
+    </div>
+  </main>
+
+  <nav id="corner" aria-label="快捷操作">
+    <button type="button" id="btnList">作品列表</button>
+  </nav>
+
+  <div id="tip" hidden aria-hidden="true"><img alt="" decoding="async"><b></b><span></span></div>
+
+  <dialog id="listDlg" aria-labelledby="listTitle">
+    <div class="dlg-head"><h2 id="listTitle">作品列表</h2><button type="button" id="listClose">关闭</button></div>
+    <ol id="listItems"></ol>
+  </dialog>
+
+  <dialog id="videoDlg" aria-labelledby="videoTitle">
+    <div class="dlg-head"><h2 id="videoTitle">演示视频</h2><button type="button" id="videoClose">关闭</button></div>
+    <video id="bigVid" controls playsinline preload="none"></video>
+  </dialog>
+
+  <div id="sr" class="sr-only" aria-live="polite"></div>
+  <noscript><p style="color:#fff;padding:16px">这个作品集需要开启 JavaScript。</p></noscript>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

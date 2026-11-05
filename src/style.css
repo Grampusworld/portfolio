@@ -1,0 +1,219 @@
+/* 所有尺寸都是 var(--u)（1 个原生像素对应的 CSS 像素）的整数倍，保证像素对齐。
+   正文是 10px 像素字（行高 11）；--t 是浮层文字用的倍率。 */
+:root {
+  --u: 4px;
+  --t: 2px;
+  --ink: #16110f;
+  --paper: #ebdfc0;
+  --paper2: #c9b791;
+  --amber: #e0b856;
+  --amber2: #fae79e;
+  --dim: #b6b9bc;
+  --scr: #0d1613;
+  --scr2: #1b2c26;
+  --red: #bd382a;
+  --red2: #ef694b;
+  --metal: #b6b9bc;
+  --metal-d: #3f444b;
+  --leather: #56331f;
+  --grass: #46993b;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: var(--grass);
+}
+body {
+  font-family: FusionPixel, ui-monospace, monospace;
+  font-size: calc(var(--u) * 10);
+  line-height: calc(var(--u) * 11);
+  color: var(--paper);
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  font-synthesis: none;
+  font-kerning: none;
+  text-rendering: optimizeSpeed;
+  touch-action: manipulation;
+}
+body:not(.ready) #stage, body:not(.ready) #corner { visibility: hidden; }
+h1, h2, p, ol, ul { margin: 0; padding: 0; font: inherit; }
+ol, ul { list-style: none; }
+button, a { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+#scene { position: fixed; left: 0; top: 0; image-rendering: pixelated; image-rendering: crisp-edges; }
+#stage { position: fixed; left: 0; top: 0; }
+#stage > *, #machine > *, #corner, #tip { position: absolute; }
+#detailView > * { position: absolute; }
+
+:focus { outline: none; }
+:focus-visible { outline: var(--u) solid var(--amber2); outline-offset: 0; }
+
+/* ---------- 磁带热区 ---------- */
+#tapes, #keys { left: 0; top: 0; }
+.hit { position: absolute; }
+.hit.tape { touch-action: none; }
+.hit.tape:focus-visible { outline-offset: calc(var(--u) * 1); }
+#bagHit { touch-action: pan-y; }
+
+/* ---------- 磁带机按键：键帽画在画布上，DOM 负责热区和刻字 ---------- */
+#machine.shake { transform: translateY(var(--u)); }
+.hit.key { display: block; }
+.hit.key span {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: calc(var(--u) * 11);
+  text-align: center;
+  color: #16110f;
+  white-space: nowrap;
+}
+.hit.key-power span { color: #6b1b19; }
+/* 音量滚轮：滚轮画在画布上，DOM 负责拖动热区、键盘和刻字 */
+#volWheel { cursor: ew-resize; touch-action: none; }
+#volWheel span { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * 11); text-align: center; color: #16110f; white-space: nowrap; pointer-events: none; }
+
+/* ---------- 详情屏 ---------- */
+#screen { overflow: hidden; }
+#screen.off > * { visibility: hidden; }
+#screen.opening { animation: crt .24s steps(6, end); }
+@keyframes crt {
+  0% { clip-path: inset(49% 0 49% 0); filter: brightness(2.2); }
+  60% { clip-path: inset(10% 0 10% 0); }
+  100% { clip-path: inset(0 0 0 0); filter: none; }
+}
+#idleView, #detailView { position: absolute; inset: 0; }
+#idleView { padding: 0 calc(var(--u) * 3); }
+.scr-head { color: var(--amber); margin-bottom: var(--u); }
+.track {
+  display: flex; gap: calc(var(--u) * 5); width: 100%; text-align: left;
+  height: calc(var(--u) * 12); line-height: calc(var(--u) * 12);
+  padding: 0 calc(var(--u) * 2);
+}
+.track .tc { color: var(--amber); flex: none; }
+.track .tn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track:hover, .track:focus-visible { background: var(--scr2); color: var(--amber2); }
+
+#dHead { display: flex; gap: calc(var(--u) * 3); white-space: nowrap; overflow: hidden; }
+#dCode { color: var(--amber); flex: none; }
+#dTitle { overflow: hidden; text-overflow: ellipsis; }
+#dStatus { margin-left: auto; flex: none; color: var(--red2); }
+.vid {
+  display: block; overflow: hidden;
+  background: repeating-linear-gradient(0deg, var(--scr) 0 var(--u), var(--scr2) var(--u) calc(var(--u) * 2));
+  box-shadow: 0 0 0 var(--u) var(--ink), 0 0 0 calc(var(--u) * 2) var(--metal-d);
+}
+.vid video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vid::after { /* 轻微扫描线，压在高清画面上 */
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 var(--u), transparent var(--u) calc(var(--u) * 2));
+}
+.vid-play, .vid-err { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--paper); z-index: 1; }
+.rm .vid .vid-play { display: flex; }
+.vid.err video { visibility: hidden; }
+.vid.err .vid-err { display: flex; color: var(--dim); }
+.vid:hover { box-shadow: 0 0 0 var(--u) var(--ink), 0 0 0 calc(var(--u) * 2) var(--amber); }
+#dIntro { overflow: hidden; color: var(--paper); }
+#dTags { display: flex; gap: calc(var(--u) * 2); pointer-events: none; }
+#dTags li {
+  height: calc(var(--u) * 12); line-height: calc(var(--u) * 10);
+  padding: 0 calc(var(--u) * 2);
+  border: var(--u) solid var(--metal-d); color: var(--metal);
+  white-space: nowrap;
+}
+#dLinks { display: flex; justify-content: flex-end; gap: calc(var(--u) * 2); pointer-events: none; }
+.sbtn {
+  pointer-events: auto;
+  display: block; text-decoration: none; white-space: nowrap;
+  height: calc(var(--u) * 12); line-height: calc(var(--u) * 10);
+  padding: 0 calc(var(--u) * 3);
+  background: var(--paper); color: var(--ink);
+  border: var(--u) solid var(--ink);
+}
+.sbtn:hover { background: var(--amber2); }
+.sbtn[hidden] { display: none; }
+
+/* ---------- 磁带窗提示 & 计数器 ---------- */
+#winHint { display: flex; align-items: center; justify-content: center; pointer-events: none; color: var(--amber); }
+#winHint span { animation: blink 1s steps(1, end) infinite; }
+#winHint.flash span { animation: blink .2s steps(1, end) 4; color: var(--red2); }
+#winHint[hidden] { display: none; }
+@keyframes blink { 50% { visibility: hidden; } }
+#counter { color: var(--paper); text-align: center; line-height: calc(var(--u) * 12); letter-spacing: var(--u); pointer-events: none; }
+
+/* ---------- 右上角两个按钮 ---------- */
+#corner { display: flex; justify-content: flex-end; gap: calc(var(--u) * 3); }
+#corner button {
+  height: calc(var(--u) * 13); line-height: calc(var(--u) * 11);
+  padding: 0 calc(var(--u) * 3);
+  background: var(--paper); color: var(--ink);
+  border: var(--u) solid var(--ink);
+  display: flex; align-items: center; gap: calc(var(--u) * 2);
+  white-space: nowrap;
+}
+#corner button:hover { background: var(--amber2); }
+#corner button:active { transform: translateY(var(--u)); }
+
+/* ---------- 左上角标题牌 ---------- */
+#sign { pointer-events: none; }
+#sign span { position: absolute; white-space: nowrap; }
+#sign .big { font-size: calc(var(--u) * 10); line-height: calc(var(--u) * 11); }
+#sign .small { font-family: FusionPixel8, FusionPixel, monospace; font-size: calc(var(--u) * 8); line-height: calc(var(--u) * 9); }
+#sign .ink { color: var(--ink); }
+#sign .ink-brown { color: #77492b; }
+#sign .ink-wood { color: #f0d9a8; text-shadow: 0 var(--u) 0 #21130c; }
+#sign .ink-wood2 { color: #d6b475; }
+#sign .on-grass { color: #f2ead4; text-shadow: var(--u) var(--u) 0 #1d4527; }
+#sign .on-grass.amber { color: #fae79e; }
+
+/* ---------- 悬停提示 ---------- */
+#tip {
+  pointer-events: none; z-index: 5;
+  background: var(--paper); color: var(--ink);
+  border: var(--u) solid var(--ink);
+  padding: calc(var(--u) * 2);
+  display: flex; flex-direction: column; gap: var(--u);
+}
+#tip[hidden] { display: none; }
+#tip img { width: calc(var(--u) * 72); height: calc(var(--u) * 40); object-fit: cover; display: block; background: var(--scr); }
+#tip img[hidden] { display: none; }
+#tip b { font-weight: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tip span { color: #77492b; }
+
+/* ---------- 浮层（作品列表 / 视频） ---------- */
+dialog {
+  padding: 0; border: calc(var(--t) * 2) solid var(--ink);
+  background: var(--paper); color: var(--ink);
+  font-size: calc(var(--t) * 10); line-height: calc(var(--t) * 14);
+  max-width: calc(100vw - 32px);
+}
+dialog::backdrop { background: rgba(13,22,19,.62); }
+.dlg-head {
+  display: flex; align-items: center; justify-content: space-between; gap: calc(var(--t) * 8);
+  padding: calc(var(--t) * 4) calc(var(--t) * 6);
+  background: var(--leather); color: var(--paper);
+}
+.dlg-head button {
+  border: var(--t) solid var(--paper); padding: 0 calc(var(--t) * 4);
+  line-height: calc(var(--t) * 12);
+}
+.dlg-head button:hover { background: var(--paper); color: var(--ink); }
+#listDlg { width: calc(var(--t) * 300); }
+#listItems { padding: calc(var(--t) * 4) calc(var(--t) * 8) calc(var(--t) * 8); max-height: 75vh; overflow: auto; }
+#listItems li { padding: calc(var(--t) * 6) 0; border-bottom: var(--t) dashed var(--paper2); }
+#listItems li:last-child { border-bottom: 0; }
+#listItems .go { text-align: left; color: var(--ink); text-decoration: underline; text-decoration-thickness: var(--t); text-underline-offset: calc(var(--t) * 3); }
+#listItems .go:hover { color: #bd512e; }
+#listItems .tc { color: #77492b; margin-right: calc(var(--t) * 6); }
+#listItems .intro { margin-top: calc(var(--t) * 2); }
+#listItems .meta { color: #626870; }
+#listItems .links { display: flex; gap: calc(var(--t) * 12); margin-top: calc(var(--t) * 2); }
+#listItems .links a { color: #3b326d; }
+#videoDlg { width: min(calc(100vw - 32px), calc(var(--t) * 480)); background: var(--ink); }
+#bigVid { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+
+/* ---------- 减少动态效果 ---------- */
+.rm #winHint span { animation: none; }
+.rm #screen.opening { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
