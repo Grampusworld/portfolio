@@ -8,7 +8,7 @@ import { join } from 'node:path';
 const [url, js, w = '1280', h = '720'] = process.argv.slice(2);
 const port = 9335;
 const chrome = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'eval-'))}`, 'about:blank'], { stdio: 'ignore' });
+  ['--headless=new', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${port}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'eval-'))}`, 'about:blank'], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let targets = [];
 for (let i = 0; i < 50 && !targets.length; i++) {

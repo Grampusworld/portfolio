@@ -2,6 +2,7 @@
 // media 路径相对 public/；缺哪个字段，对应按钮/画面自动隐藏。
 // clip：详情屏播放的片段（360p，插带时才加载，快进/倒带在它上面跳 ±3 秒）；
 // full：点开放大的 720p 版（和 clip 同一条时间线）；loop：没有 clip 时的 3–5 秒循环兜底。
+// audio：clip 带原声，播放时背景风声自动压低。
 // label 是磁带纸标签上的名字（8px 字，宽度 ≤ 34 像素：约 4 个汉字或 7 个英文字母）。
 // intro 控制在 21 个汉字以内。
 export const WORKS = [
@@ -17,7 +18,7 @@ export const WORKS = [
       play: 'https://ib-museum-demo.app.workbuddy.host/?sharecode=5WGABVAYL7',
       source: 'https://github.com/Grampusworld/Unity_Project_Ib',
     },
-    media: { loop: 'media/ib/loop.mp4', clip: 'media/ib/clip.mp4', poster: 'media/ib/poster.webp', full: 'media/ib/full.mp4' },
+    media: { audio: true, loop: 'media/ib/loop.mp4', clip: 'media/ib/clip.mp4', poster: 'media/ib/poster.webp', full: 'media/ib/full.mp4' },
   },
   {
     id: 'sleight',
@@ -60,6 +61,7 @@ export const WORKS = [
       source: 'https://github.com/Grampusworld/Unity_Lottery',
     },
     media: {
+      audio: true,
       loop: 'media/lottery/loop.mp4',
       clip: 'media/lottery/clip.mp4',
       poster: 'media/lottery/poster.webp',

@@ -2,7 +2,12 @@ import './style.css';
 import { WORKS } from './works.js';
 import { buildLayout, TOP_BAR_H } from './layout.js';
 import * as A from './art.js';
-import { sfxInsert, sfxKey, sfxLid, sfxMeow, setReel, setMuted, isMuted, setVolume, getVolume } from './audio.js';
+import * as AUDIO from './audio.js';
+import {
+  sfxInsert, sfxKey, sfxLid, sfxMeow, sfxPick, sfxDrop, sfxWhoosh, sfxEject, sfxMotor, sfxSeek, sfxPower,
+  sfxScreen, sfxTick, sfxBell, sfxPaper, sfxPop, setAmbience, duckAmbience,
+  setReel, setMuted, isMuted, setVolume, getVolume, outputLevel,
+} from './audio.js';
 
 const $ = (q) => document.querySelector(q);
 const cvs = $('#scene');
@@ -31,7 +36,8 @@ const S = {
 };
 const LID_MS = 110; // 玻璃盖从合上到完全翻开
 const FREEZE = Number(params.get('freeze')) || 0;
-const tapes = WORKS.map((w, i) => ({ i, w, where: 'bag', x: 0, y: 0, rot: 0, trail: [], anim: null, lift: 0 }));
+// 悬停拿起用弹簧：ly/lv 是抬起高度和速度，lr/rv 是倾角和角速度（拿起时略微扶正）
+const tapes = WORKS.map((w, i) => ({ i, w, where: 'bag', x: 0, y: 0, rot: 0, trail: [], anim: null, lift: 0, hover: false, ly: 0, lv: 0, lr: null, rv: 0 }));
 
 const KEYS = [
   { k: 'play', label: '播放' }, { k: 'pause', label: '暂停' }, { k: 'eject', label: '退带' },
@@ -104,9 +110,9 @@ const tapeBtns = WORKS.map((w, i) => {
   b.addEventListener('lostpointercapture', (e) => { if (drag && drag.id === e.pointerId) cancelDrag(); });
   b.addEventListener('click', () => onTapeClick(i));
   b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && !drag) preview(i); });
-  b.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && S.preview === i) unpreview(); });
+  b.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && S.preview === i) unpreview(false); });
   b.addEventListener('focus', () => { if (lastPointer === 'kbd') { ensureVisible(i); preview(i); } });
-  b.addEventListener('blur', () => { if (S.preview === i) unpreview(); });
+  b.addEventListener('blur', () => { if (S.preview === i) unpreview(false); });
   return b;
 });
 window.addEventListener('keydown', () => { lastPointer = 'kbd'; }, true);
@@ -132,6 +138,13 @@ const keysEl = $('#keys');
   b.innerHTML = `<span>${label}</span>`;
   b.setAttribute('aria-label', label);
   b.addEventListener('click', () => onKey(k));
+  // 悬停：键帽描琥珀色边、变亮；按住：键帽立刻压下去，松手再弹起
+  b.addEventListener('pointerenter', () => { S.hoverKey = k; });
+  b.addEventListener('pointerleave', () => { if (S.hoverKey === k) S.hoverKey = null; if (S.keyDown[k] === Infinity) S.keyDown[k] = now() + 60; });
+  b.addEventListener('focus', () => { if (lastPointer === 'kbd') S.hoverKey = k; });
+  b.addEventListener('blur', () => { if (S.hoverKey === k) S.hoverKey = null; });
+  b.addEventListener('pointerdown', (e) => { if (e.button === 0) S.keyDown[k] = Infinity; });
+  b.addEventListener('pointerup', () => { if (S.keyDown[k] === Infinity) S.keyDown[k] = now() + 60; });
   keysEl.appendChild(b);
   keyBtns[k] = b;
 });
@@ -145,7 +158,7 @@ WORKS.forEach((w, i) => {
   b.className = 'track';
   b.innerHTML = `<span class="tc">${w.code}</span><span class="tn">${w.title}</span>`;
   b.setAttribute('aria-label', `播放 ${fullName(w)}`);
-  b.addEventListener('click', () => insert(i));
+  b.addEventListener('click', () => { sfxKey(); insert(i); });
   li.appendChild(b);
   trackList.appendChild(li);
 });
@@ -167,7 +180,8 @@ WORKS.forEach((w, i) => {
   li.querySelector('.go').addEventListener('click', () => { listDlg.close(); insert(i); });
   listUl.appendChild(li);
 });
-$('#btnList').addEventListener('click', () => { sfxKey(); unpreview(); listDlg.showModal(); });
+$('#btnList').addEventListener('click', () => { sfxPaper(true); unpreview(); listDlg.showModal(); });
+listDlg.addEventListener('close', () => sfxPaper(false));
 $('#listClose').addEventListener('click', () => listDlg.close());
 listDlg.addEventListener('click', (e) => { if (e.target === listDlg) listDlg.close(); });
 
@@ -184,14 +198,28 @@ function syncSound() {
 const wheelEl = $('#volWheel');
 function setVol(v, fromUser = false) {
   v = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
+  const before = getVolume();
   setVolume(v);
   if (fromUser && v > 0 && isMuted()) setMuted(false);
+  // 每过 5% 一格，响一下棘轮
+  if (fromUser && Math.floor(before * 20) !== Math.floor(v * 20)) sfxTick(v);
   const pct = Math.round(v * 100);
+  syncWheelLabel();
   wheelEl.setAttribute('aria-valuenow', String(pct));
   wheelEl.setAttribute('aria-valuetext', pct === 0 ? '静音' : `${pct}%`);
   syncSound();
 }
 let wheelDrag = null;
+const wheelLabel = wheelEl.querySelector('span');
+// 悬停 / 拖动 / 键盘聚焦时，刻字换成当前音量
+function syncWheelLabel() {
+  const pct = Math.round(getVolume() * 100);
+  wheelLabel.textContent = S.hoverWheel || wheelDrag ? (pct === 0 ? '静音' : `${pct}%`) : '音量';
+}
+wheelEl.addEventListener('pointerenter', () => { S.hoverWheel = true; syncWheelLabel(); });
+wheelEl.addEventListener('pointerleave', () => { S.hoverWheel = false; syncWheelLabel(); });
+wheelEl.addEventListener('focus', () => { S.hoverWheel = true; syncWheelLabel(); });
+wheelEl.addEventListener('blur', () => { S.hoverWheel = false; syncWheelLabel(); });
 wheelEl.addEventListener('pointerdown', (e) => {
   if (e.button > 0) return;
   wheelDrag = { id: e.pointerId, x0: e.clientX, v0: getVolume() };
@@ -202,7 +230,7 @@ wheelEl.addEventListener('pointermove', (e) => {
   if (!wheelDrag || e.pointerId !== wheelDrag.id) return;
   setVol(wheelDrag.v0 + (e.clientX - wheelDrag.x0) / u * 0.02, true); // 横向拨 50 个原生像素 = 0→100%
 });
-const endWheel = () => { wheelDrag = null; };
+const endWheel = () => { wheelDrag = null; syncWheelLabel(); };
 wheelEl.addEventListener('pointerup', endWheel);
 wheelEl.addEventListener('pointercancel', endWheel);
 wheelEl.addEventListener('lostpointercapture', endWheel);
@@ -239,6 +267,7 @@ vidBtn.addEventListener('click', () => {
   bigVid.loop = !m.full;
   bigVid.addEventListener('loadedmetadata', () => { try { bigVid.currentTime = at; } catch (_) { /* 忽略 */ } }, { once: true });
   $('#videoTitle').textContent = WORKS[S.cur].title + (m.full ? ' · 实机视频' : ' · 演示');
+  sfxPop();
   videoDlg.showModal();
   bigVid.play().catch(() => {});
 });
@@ -283,6 +312,7 @@ vid.addEventListener('error', () => vidBtn.classList.add('err'));
 tip.querySelector('img').addEventListener('error', (e) => { e.target.hidden = true; posTip(); });
 
 function openScreen(i) {
+  sfxScreen();
   fillDetail(i);
   idleView.hidden = true;
   detailView.hidden = false;
@@ -315,7 +345,8 @@ function openLid(cb) {
 }
 function closeLid(cb) {
   S.lidTarget = 0;
-  after(LID_MS, () => { sfxLid(false); cb && cb(); });
+  sfxLid(false); // 音效里的「叮咔」在约 70ms 后，正好对上盖子扣上
+  after(LID_MS, () => { cb && cb(); });
 }
 
 // ---------- 动作 ----------
@@ -326,10 +357,15 @@ function ctrlPoint(p0, p1) {
 function flyTo(t, to, dur, done) {
   const p0 = { x: t.x, y: t.y, rot: t.rot };
   if (![p0.x, p0.y, p0.rot].every(Number.isFinite)) Object.assign(p0, homePos(t.i));
-  if (RM || dur <= 0) { t.x = to.x; t.y = to.y; t.rot = to.rot; t.anim = null; t.where = 'hold'; done(); return; }
+  const d = deckPos();
+  const toDeck = Math.abs(to.x - d.x) < 0.5 && Math.abs(to.y - d.y) < 0.5;
+  // 飞回包里的磁带落地时「嗒」一声
+  const fin = () => { done(); if (!toDeck && t.where === 'bag') sfxDrop(); };
+  if (RM || dur <= 0) { t.x = to.x; t.y = to.y; t.rot = to.rot; t.anim = null; t.where = 'hold'; fin(); return; }
+  sfxWhoosh(dur / 1000, toDeck);
   t.where = 'fly';
   t.trail = [];
-  t.anim = { t0: now(), dur, p0, p1: to, c: ctrlPoint(p0, to), done };
+  t.anim = { t0: now(), dur, p0, p1: to, c: ctrlPoint(p0, to), done: fin };
 }
 
 // 磁带插到底：机身震 1px + 咔哒，开始播放；玻璃盖随后合上
@@ -340,6 +376,7 @@ function land(t, closeDelay = 60) {
   S.counter = 0;
   if (!RM) { S.shakeUntil = now() + 70; swingCat(1, 700, 180); }
   sfxInsert();
+  after(90, () => sfxMotor(true));
   S.mode = 'playing';
   openScreen(t.i);
   setReel(true, false);
@@ -385,6 +422,7 @@ function eject() {
   closeScreen();
   setReel(false);
   syncStatus();
+  sfxEject();
   openLid(() => flyTo(t, homePos(t.i), 400, () => {
     t.where = 'bag'; S.cur = -1; S.counter = 0;
     closeLid(() => { setBusy(false); syncStatus(); });
@@ -394,6 +432,7 @@ function eject() {
 }
 function play() {
   if (S.cur < 0 || S.busy) { flashHint(); return; }
+  if (S.mode !== 'playing') sfxMotor(true);
   S.mode = 'playing';
   if (!RM) vid.play().catch(() => {});
   setReel(true, false);
@@ -402,6 +441,7 @@ function play() {
 function pause() {
   if (S.cur < 0 || S.busy || S.mode !== 'playing') return;
   S.mode = 'paused';
+  sfxMotor(false);
   vid.pause();
   setReel(false);
   syncStatus();
@@ -416,6 +456,7 @@ function seek(d) {
   S.fast = d > 0 ? 1 : -1;
   S.fastUntil = now() + 450;
   S.seekNote = d > 0 ? `快进 ▶▶ +${d}s` : `倒带 ◀◀ ${d}s`;
+  sfxSeek(d);
   setReel(true, true);
   syncStatus();
   say(`${d > 0 ? '快进' : '倒带'}到 ${Math.floor(t)} 秒`);
@@ -425,6 +466,7 @@ function flashHint() {
 }
 function setPower(on) {
   if (on === S.power || S.busy) return;
+  sfxPower(on);
   if (!on) {
     if (S.cur >= 0) eject();
     S.power = false; S.mode = 'idle';
@@ -518,8 +560,10 @@ function catOffset(tn) {
 }
 const catBtn = $('#catBtn');
 catBtn.addEventListener('click', () => {
-  swingCat(Math.random() < 0.5 ? 1 : 2, 900 + Math.random() * 900, 220 + Math.random() * 180);
-  sfxMeow();
+  const amp = Math.random() < 0.5 ? 1 : 2;
+  swingCat(amp, 900 + Math.random() * 900, 220 + Math.random() * 180);
+  sfxBell(amp + 1);                       // 挂件上的小铃铛，摇得越大响得越多
+  if (Math.random() < 0.6) sfxMeow();     // 偶尔「喵」一声
   say('三花猫晃了晃');
 });
 
@@ -533,7 +577,7 @@ function recover(reason) {
   drag = null;
   let deckTape = S.cur >= 0 ? tapes[S.cur] : null;
   for (const t of tapes) {
-    t.anim = null; t.trail = []; t.lift = 0;
+    t.anim = null; t.trail = []; t.lift = 0; t.hover = false; t.ly = 0; t.lv = 0; t.lr = null;
     if (t === deckTape) t.where = 'deck';
     else t.where = 'bag';
   }
@@ -550,8 +594,9 @@ function recover(reason) {
 function preview(i) {
   const t = tapes[i];
   if (t.where !== 'bag' || S.busy) return;
-  if (S.preview >= 0 && S.preview !== i) tapes[S.preview].lift = 0;
-  S.preview = i; t.lift = 2;
+  if (S.preview >= 0 && S.preview !== i) tapes[S.preview].hover = false;
+  if (!t.hover) sfxPick();
+  S.preview = i; t.hover = true;
   const w = WORKS[i];
   const img = tip.querySelector('img');
   const poster = w.media?.poster;
@@ -577,8 +622,13 @@ function posTip() {
   y = Math.max(-oy + 2, Math.min(NH - oy - th - 2, y));
   place(tip, ox + x, oy + y, tw, null);
 }
-function unpreview() {
-  if (S.preview >= 0) tapes[S.preview].lift = 0;
+// silent=false 时播放「放下」声（鼠标移开 / 失焦）；插带、开始拖拽时静默收起
+function unpreview(silent = true) {
+  if (S.preview >= 0) {
+    const t = tapes[S.preview];
+    if (t.hover && !silent && t.where === 'bag') after(RM ? 0 : 110, sfxDrop); // 等弹簧落到底再响
+    t.hover = false;
+  }
   S.preview = -1;
   tip.hidden = true;
 }
@@ -601,6 +651,7 @@ function onMove(e) {
     if (L.mobile && Math.abs(dx) > Math.abs(dy)) drag.mode = 'scroll';
     else if (t && t.where === 'bag' && !S.busy) {
       drag.mode = 'tape';
+      if (!t.hover) sfxPick();
       const h = homePos(t.i);
       Object.assign(t, h);
       t.where = 'drag';
@@ -775,7 +826,11 @@ function update(tn) {
   S.lastT = tn;
   runQueue(tn);
   // 玻璃盖：忙碌时由动作序列控制，空闲时跟随「拖着磁带悬停」
-  if (!S.busy) S.lidTarget = S.lidHover ? 1 : 0;
+  if (!S.busy) {
+    const tg = S.lidHover ? 1 : 0;
+    if (tg !== S.lidTarget) sfxLid(tg === 1); // 拖着磁带经过卡座：开盖 / 合盖都有声
+    S.lidTarget = tg;
+  }
   if (RM) S.lid = S.lidTarget;
   else if (S.lid !== S.lidTarget) {
     const step = dt / LID_MS;
@@ -786,7 +841,25 @@ function update(tn) {
     if (t.where === 'fly' && !t.anim) t.where = S.cur === t.i ? 'deck' : 'bag';
     if (t.where === 'drag' && !(drag && drag.mode === 'tape' && drag.i === t.i)) flyTo(t, homePos(t.i), 220, () => { t.where = 'bag'; });
     if (t.where === 'hold' && !S.busy) t.where = S.cur === t.i ? 'deck' : 'bag';
-    if (t.where === 'bag') { const h = homePos(t.i); t.x = h.x; t.y = h.y; t.rot = h.rot; }
+    if (t.where !== 'bag') { t.ly = 0; t.lv = 0; t.lr = null; t.lift = 0; }
+    if (t.where === 'bag') {
+      const h = homePos(t.i);
+      t.x = h.x; t.y = h.y;
+      // 拿起 / 落下：欠阻尼弹簧，拿起时冲高 1px 再稳住，落下时陷进皮面 1px 再弹回；同时略微扶正
+      if (t.lr == null) { t.lr = h.rot; t.rv = 0; }
+      const ty = t.hover ? 4 : 0, tr = t.hover ? h.rot * 0.35 : h.rot;
+      if (RM) { t.ly = ty; t.lv = 0; t.lr = tr; t.rv = 0; }
+      else {
+        const dts = Math.min(0.034, dt / 1000);
+        for (let k = 0; k < 2; k++) { // 半步积分，低帧率时也稳定
+          const hs = dts / 2;
+          t.lv += (340 * (ty - t.ly) - 15 * t.lv) * hs; t.ly += t.lv * hs;
+          t.rv += (220 * (tr - t.lr) - 24 * t.rv) * hs; t.lr += t.rv * hs;
+        }
+      }
+      t.rot = t.lr;
+      t.lift = Math.round(t.ly);
+    }
     else if (t.where === 'deck') { const d = deckPos(); t.x = d.x; t.y = d.y; t.rot = 0; }
     else if (t.where === 'fly' && t.anim) {
       const a = t.anim;
@@ -821,7 +894,16 @@ function update(tn) {
   else if (secs === 0 && counterEl.textContent !== '000') counterEl.textContent = '000';
   if (L.mobile && scroll !== lastScroll) positionTapes();
   // 草地：12 帧/秒随风摆动
-  if (!RM && tn - grassT > 83) { grassT = tn; A.renderGrass(G, tn / 1000); }
+  if (tn - grassT > 83) {
+    grassT = tn;
+    if (!RM) A.renderGrass(G, tn / 1000);
+    // 背景音：取画面中央的阵风强度（和草地动画同一个公式），声画同步
+    const s0 = Math.sin((tn / 1000) * 0.9 - (NW / 2) * 0.03 - (NH / 2) * 0.012);
+    setAmbience(s0 > 0 ? s0 * s0 : 0);
+    // 视频有原声且正在播放时，把风声压低
+    const m = S.cur >= 0 ? WORKS[S.cur].media || {} : {};
+    duckAmbience(audible() && ((m.audio && !vid.paused && !detailView.hidden) || (videoDlg.open && !bigVid.paused)));
+  }
 }
 
 function draw(tn) {
@@ -836,8 +918,9 @@ function draw(tn) {
     g.beginPath(); g.rect(ox + r.x, oy + r.y - 6, r.w, r.h + 10); g.clip();
   }
   for (const t of tapes) if (t.where !== 'bag') { const h = homePos(t.i); blit(A.rotated(spr.slot, h.rot), h.x, h.y); }
-  const inBag = tapes.filter((t) => t.where === 'bag').sort((a, b) => a.lift - b.lift);
-  for (const t of inBag) drawTape(t, 0, t.x, t.y, t.rot, t.lift, 1 + t.lift);
+  const inBag = tapes.filter((t) => t.where === 'bag').sort((a, b) => a.ly - b.ly);
+  // 抬得越高，影子离得越远
+  for (const t of inBag) drawTape(t, 0, t.x, t.y, t.rot, t.lift, 1 + Math.max(0, Math.round(t.ly / 2)));
   g.restore();
 
   // 磁带机
@@ -856,15 +939,23 @@ function draw(tn) {
     if (k === 'rew') return S.fast < 0;
     return false;
   };
-  KEYS.forEach(({ k }, j) => g.drawImage(spr.keys[k][down(k) ? 1 : 0], mx + m.keys[j], my + m.keyY));
-  g.drawImage(spr.keys.power[down('power') ? 1 : 0], mx + m.power, my + m.keyY);
+  const keyImg = (k) => spr.keys[k][down(k) ? 1 : S.hoverKey === k ? 2 : 0]; // 0 弹起 / 1 按下 / 2 悬停
+  KEYS.forEach(({ k }, j) => g.drawImage(keyImg(k), mx + m.keys[j], my + m.keyY));
+  g.drawImage(keyImg('power'), mx + m.power, my + m.keyY);
   g.fillStyle = S.power ? A.CSSC.r2 : A.CSSC.r0;
   g.fillRect(mx + m.led.x, my + m.led.y, 2, 2);
   // 音量滚轮：条纹随音量平移；下方琥珀色刻度条显示音量大小
   const wh = m.wheel, vol = getVolume();
   const phase = Math.round(vol * 40) % 3;
-  if (!spr.wheel[phase]) spr.wheel[phase] = A.makeWheel(wh, phase);
-  g.drawImage(spr.wheel[phase], mx + wh.x, my + wh.y);
+  const hot = S.hoverWheel || !!wheelDrag;
+  const wk = phase + (hot ? 3 : 0);
+  if (!spr.wheel[wk]) spr.wheel[wk] = A.makeWheel(wh, phase, hot);
+  g.drawImage(spr.wheel[wk], mx + wh.x, my + wh.y);
+  if (hot) { // 悬停：滚轮外圈描琥珀色
+    g.fillStyle = A.CSSC.b2;
+    g.fillRect(mx + wh.x - 1, my + wh.y - 1, wh.w + 2, 1); g.fillRect(mx + wh.x - 1, my + wh.y + wh.h, wh.w + 2, 1);
+    g.fillRect(mx + wh.x - 1, my + wh.y, 1, wh.h); g.fillRect(mx + wh.x + wh.w, my + wh.y, 1, wh.h);
+  }
   const lit = Math.round(wh.w * vol);
   if (lit > 0) { g.fillStyle = audible() ? A.CSSC.b2 : A.CSSC.m2; g.fillRect(mx + wh.x, my + wh.y + wh.h + 2, lit, 1); }
   if (!S.power) {
@@ -941,7 +1032,7 @@ async function boot() {
     spr.label[i] = A.makeLabelText(w);
   });
   spr.slot = A.makeSlot();
-  [...KEYS.map((k) => k.k), 'power'].forEach((k) => { spr.keys[k] = [A.makeKey(k, false), A.makeKey(k, true)]; });
+  [...KEYS.map((k) => k.k), 'power'].forEach((k) => { spr.keys[k] = [A.makeKey(k, false), A.makeKey(k, true), A.makeKey(k, false, true)]; });
   spr.cat = [-2, -1, 0, 1, 2].map((o) => A.makeCat(o)); // 下标 = 偏移 + 2
   resize();
   setVol(getVolume());
@@ -993,4 +1084,5 @@ async function fuzz(secs) {
   out.textContent = document.title;
   console.log(document.title);
 }
-window.__tape = { S, tapes, insert, eject, onKey, recover, get errors() { return errCount; } };
+window.__tape = { S, tapes, insert, eject, onKey, recover, outputLevel, setVol, get errors() { return errCount; } };
+window.__audio = AUDIO; // 调试 / 测试用

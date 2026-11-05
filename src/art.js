@@ -601,13 +601,13 @@ export function makeSignCard(w, h) {
 
 // ---------- 音量滚轮 ----------
 // 竖轴、横向拨动的拇指轮：竖条纹随音量值平移，制造转动感；两侧按圆柱面压暗
-export function makeWheel(wh, phase) {
+export function makeWheel(wh, phase, hot = false) {
   const P = new Pix(wh.w, wh.h);
   for (let y = 0; y < wh.h; y++) for (let x = 0; x < wh.w; x++) {
     const edge = Math.min(x, wh.w - 1 - x);
     const ridge = (x + phase) % 3 === 0;
-    let c = ridge ? C.m1 : edge < 2 ? C.m2 : edge < 5 ? C.m3 : C.m4;
-    if (!ridge && (y === 0)) c = edge < 3 ? C.m3 : C.m5; // 顶面高光
+    let c = ridge ? (hot ? C.m2 : C.m1) : edge < 2 ? (hot ? C.m3 : C.m2) : edge < 5 ? (hot ? C.m4 : C.m3) : (hot ? C.m5 : C.m4);
+    if (!ridge && (y === 0)) c = edge < 3 ? C.m3 : (hot ? C.p1 : C.m5); // 顶面高光
     if (y === wh.h - 1) c = C.m1;                      // 底部阴影
     P.set(x, y, c);
   }
@@ -623,10 +623,12 @@ const ICON = {
   rew: ['.1..1', '11.11', '11111', '11.11', '.1..1'],
   power: ['..1..', '1.1.1', '1.1.1', '1...1', '.111.'],
 };
-export function makeKey(kind, down) {
+// hover：键帽整体亮一档、描琥珀色边（像被灯照到），提示可以按
+export function makeKey(kind, down, hover = false) {
   const P = new Pix(16, 11);
   const red = kind === 'power';
-  const [dk, mid, hi, top] = red ? [C.r0, C.r1, C.r1, C.r2] : [C.m2, C.m3, C.m4, C.m5];
+  let [dk, mid, hi, top] = red ? [C.r0, C.r1, C.r1, C.r2] : [C.m2, C.m3, C.m4, C.m5];
+  if (hover) [dk, mid, hi, top] = red ? [C.r1, C.r2, C.r2, C.fp] : [C.m3, C.m4, C.m5, C.p1];
   const off = down ? 2 : 0;
   // 键帽侧面（按下后变矮）
   P.rect(0, off, 16, 11 - off, dk);
@@ -644,7 +646,7 @@ export function makeKey(kind, down) {
   for (let y = 0; y < 11; y++) for (let x = 0; x < 16; x++) {
     if (!P.on(x, y)) continue;
     const e = x === 0 || x === 15 || y === off || y === 10;
-    Q.set(x, y, e ? C.ink : P.get(x, y));
+    Q.set(x, y, e ? (hover ? C.b1 : C.ink) : P.get(x, y));
   }
   return Q.canvas();
 }

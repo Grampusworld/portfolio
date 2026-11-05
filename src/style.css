@@ -68,6 +68,11 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
   white-space: nowrap;
 }
 .hit.key-power span { color: #6b1b19; }
+/* 悬停：刻字变琥珀色，和键帽的琥珀描边呼应 */
+.hit.key:hover span, .hit.key:focus-visible span { color: #ac7c2b; }
+.hit.key-power:hover span, .hit.key-power:focus-visible span { color: #bd382a; }
+.hit.key:focus-visible, #volWheel:focus-visible { outline: none; } /* 键盘焦点改由画布上的琥珀描边表示 */
+#volWheel:hover span, #volWheel:focus-visible span { color: #ac7c2b; }
 /* 音量滚轮：滚轮画在画布上，DOM 负责拖动热区、键盘和刻字 */
 #volWheel { cursor: ew-resize; touch-action: none; }
 #volWheel span { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * 11); text-align: center; color: #16110f; white-space: nowrap; pointer-events: none; }
